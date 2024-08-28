@@ -7,22 +7,37 @@ intents = discord.Intents.all()
 
 client = discord.Client(intents = intents)
 bot = commands.Bot(command_prefix = "!", intents = intents)
+defaultRoles = {}
 
 @bot.event
 async def on_ready():
     await bot.tree.sync()
     print(f'We have logged in as {bot.user}')
 
-defaultRole = None
-
 @bot.tree.command(name = "setdefaultrole", description = "Sets the default role, will be given to all joining users.")
 async def _set_default_role(interaction : discord.Interaction, role : discord.Role):
-    global defaultRole
-    defaultRole = role
+    defaultRoles[interaction.guild.id] = role
     await interaction.response.send_message("Default role set.")
+
+@bot.tree.command(name = "removedefaultrole", description = "Sets the default role to none.")
+async def _remove_default_role(interaction : discord.Interaction):
+    del defaultRoles[interaction.guild.id]
+    await interaction.response.send_message("Removed default role.")
+
+@bot.tree.command(name = "getdefaultrole", description = "Print the name of the default role.")
+async def _get_default_role(interaction : discord.Interaction):
+    if (id := interaction.guild.id) in defaultRoles:
+        await interaction.response.send_message(f"This server's default role is {defaultRoles[id].name}")
+    else:
+        await interaction.response.send_message("This server has no default role. Use /setdefaultrole to set a default role.")
 
 @bot.tree.command(name = "applydefaultrole", description = "Assigns the default role to all users without roles.")
 async def _apply_default_role(interaction : discord.Interaction):
+    if (id := interaction.guild.id) in defaultRoles:
+        defaultRole = defaultRoles[id]
+    else:
+        return
+    
     rolesGiven = 0
     async for member in interaction.guild.fetch_members(limit = None):
         print(member.name + " : " + (str)(len(member.roles)))
@@ -32,6 +47,7 @@ async def _apply_default_role(interaction : discord.Interaction):
                 rolesGiven += 1
         except RuntimeError:
             print(member.name + "caused an issue!")
+            
     await interaction.response.send_message(f"Default role updated. Assigned {(str)(rolesGiven)} users the {defaultRole.name} role.")
 
 @bot.tree.command(name = "assignrole", description = "Assign a role to a member")
@@ -39,7 +55,7 @@ async def _assign_role(interaction : discord.Interaction, member : discord.Membe
     try:
         await member.add_roles(role)
         await interaction.response.send_message(f"Assigned {role.name} to @{member.name}.")
-    except RuntimeError:
+    except:
         await interaction.response.send_message("Error, role assignment failed.")
 
 @bot.tree.command(name = "removerole", description = "Remove a role from a member")
@@ -47,13 +63,16 @@ async def _remove_role(interaction : discord.Interaction, member : discord.Membe
     try:
         await member.remove_roles(role)
         await interaction.response.send_message(f"Removed {role.name} from @{member.name}")
-    except RuntimeError:
+    except:
         await interaction.response.send_message("Error, role removal failed.")
 
+
 @bot.event
-async def on_member_join(member):
-    if (defaultRole):
-        await member.add_roles(defaultRole, reason = "Default role applied")
+async def on_member_join(member : discord.Member):
+    
+    if (id := member.guild.id) in defaultRoles:
+        await member.add_roles(defaultRoles[id], reason = "Default role applied")
+
 
 @bot.tree.command(name = "boop")
 async def _boop(interaction : discord.Interaction, boop_target : discord.User):
